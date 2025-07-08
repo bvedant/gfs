@@ -12,10 +12,26 @@ import (
 	"time"
 )
 
+type statusResponseWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusResponseWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
+}
+
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
-		next.ServeHTTP(w, r)
+		start := time.Now()
+		srw := &statusResponseWriter{ResponseWriter: w, status: 200}
+
+		next.ServeHTTP(srw, r)
+
+		duration := time.Since(start)
+
+		log.Printf("%s %s %s %d %v", r.RemoteAddr, r.Method, r.URL.Path, srw.status, duration)
 	})
 }
 
