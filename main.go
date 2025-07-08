@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"time"
 )
 
 func loggingMiddleware(next http.Handler) http.Handler {
@@ -25,9 +29,28 @@ func main() {
 	http.Handle("/", loggingMiddleware(fs))
 
 	addr := fmt.Sprintf(":%d", *port)
-	log.Printf("Serving %s on port %d", *dir, *port)
-	err := http.ListenAndServe(addr, nil)
-	if err != nil {
-		log.Fatal(err)
+	server := &http.Server{
+		Addr:    addr,
+		Handler: nil,
 	}
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("ListenAndServe(): %v", err)
+		}
+	}()
+
+	<-stop
+
+	log.Println("Shutting down server...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatalf("Server shutdown failed: %v", err)
+	}
+	log.Println("Server stopped")
 }
