@@ -4,7 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,7 +31,13 @@ func loggingMiddleware(next http.Handler) http.Handler {
 
 		duration := time.Since(start)
 
-		log.Printf("%s %s %s %d %v", r.RemoteAddr, r.Method, r.URL.Path, srw.status, duration)
+		slog.Info("request",
+			slog.String("remote_addr", r.RemoteAddr),
+			slog.String("method", r.Method),
+			slog.String("path", r.URL.Path),
+			slog.Int("status", srw.status),
+			slog.Duration("duration", duration),
+		)
 	})
 }
 
@@ -51,25 +57,27 @@ func main() {
 		Handler: nil,
 	}
 
-	log.Printf("Starting server: serving %q on %s", *dir, addr)
+	slog.Info("Starting server", slog.String("dir", *dir), slog.String("addr", addr))
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("ListenAndServe(): %v", err)
+			slog.Error("ListenAndServe failed", slog.Any("err", err))
+			os.Exit(1)
 		}
 	}()
 
 	<-stop
 
-	log.Println("Shutting down server...")
+	slog.Info("Shutting down server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("Server shutdown failed: %v", err)
+		slog.Error("Server shutdown failed", slog.Any("err", err))
+		os.Exit(1)
 	}
-	log.Println("Server stopped")
+	slog.Info("Server stopped")
 }
