@@ -51,6 +51,8 @@ func main() {
 		Handler: nil,
 	}
 
+	log.Printf("Starting server: serving %q on %s", *dir, addr)
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
