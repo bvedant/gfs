@@ -41,15 +41,30 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func basicAuthMiddleware(username, password string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		u, p, ok := r.BasicAuth()
+		if !ok || u != username || p != password {
+			w.Header().Set("WWW-Authenticate", `Basic realm="Restricted"`)
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	dir := flag.String("dir", ".", "directory to serve files from")
 	port := flag.Int("port", 8080, "port to listen on")
+	username := flag.String("u", "admin", "username for basic auth")
+	password := flag.String("p", "password", "password for basic auth")
 
 	flag.Parse()
 
 	fs := http.FileServer(http.Dir(*dir))
+	handler := basicAuthMiddleware(*username, *password, loggingMiddleware(fs))
 
-	http.Handle("/", loggingMiddleware(fs))
+	http.Handle("/", handler)
 
 	addr := fmt.Sprintf(":%d", *port)
 	server := &http.Server{
